@@ -1,11 +1,11 @@
 # mega65-jotto-2020 ![mega65-jotto-2020_icon](https://github.com/user-attachments/assets/2fac5a1c-e7df-46df-b699-9b4945989394)
 
 
-Jotto 2020: a modern variant of the classic game of [*Jotto*](https://en.wikipedia.org/wiki/Jotto) for AgonLight and BBC BASIC SDL written in [BBC BASIC v3](https://en.wikipedia.org/wiki/BBC_BASIC)
+Jotto 2020: a modern variant of the classic game of [*Jotto*](https://en.wikipedia.org/wiki/Jotto) for the MEGA65 written with the [Eleven preprocessor](https://github.com/MEGA65/eleven) for [BASIC 65](https://files.mega65.org?id=42d0f1f9-610a-45f9-bad1-9502f0e6eb7d).
 
 * Jotto 2020 cleverly combines the game play of [Jotto](https://en.wikipedia.org/wiki/Jotto) with [Mastermind](https://en.wikipedia.org/wiki/Mastermind_(board_game)) and adds the option to guess mystery words of lengths from 2 to 12 letters.
 * Jotto 2020 debuted online in November 2020 as [my contest submission](https://dev.to/tonedef71/everyday-is-an-api-day-with-jotto-5eh8) for the [MuleSoft Hackathon 2020](https://blogs.mulesoft.com/dev-guides/announcing-the-mulesoft-hackathon-2020-winners/)
-* Jotto 2020 was later [re-written in BBC BASIC to run on the AgonLight](https://github.com/tonedef71/agon-jotto-2020), and now has been ported to BASIC65 to run on the MEGA65.
+* Jotto 2020 was later [re-written in BBC BASIC to run on the AgonLight](https://github.com/tonedef71/agon-jotto-2020), and now has been ported to BASIC 65 to run on the MEGA65.
 
 ## Display
 Jotto 2020 supports minimum screen dimensions of 40 columns by 25 rows.
