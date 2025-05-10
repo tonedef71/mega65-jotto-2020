@@ -1,0 +1,874 @@
+!-------------------------------------------------------------------------------
+!- This pBASIC file may be used to generate a tokenized BASIC 65 PRG file from 
+!- within a CBM prg Studio project using the default pBASIC settings.
+!-------------------------------------------------------------------------------
+rem jotto-game
+clr:key off:mouse off
+gosub @proc--default--colors:print chr$(27)"4"
+gosub @proc--setup
+gosub @proc--welcome
+do
+  gosub @proc--default--colors
+  gosub @proc--new--game
+  gosub @proc--main--loop:rem invoke main loop
+  gosub @proc--game--over
+  gosub @fn--play--again
+  if not rv% then a0$ = gn$:gosub @proc--goodbye:exit
+loop
+@end
+gosub @proc--default--colors:cursor on
+end
+:
+rem proc--setup
+@proc--setup
+!- mi = MAXINT (999,999,999)
+mi = dec("3b9ac9ff")
+!- gn$ = GameName
+gn$ = "jotto-2020"
+!- mg& = MinimumAllowedGuesses
+mg& = 5
+!- ll& = LowestWordLength
+ll& = 2
+!- hl& = HighestWordLength
+hl& = 12
+!- pt& = p--top
+pt& = 0
+!- pl& = p--left
+pl& = 1
+!- pr& = p--right
+pr& = 2
+!- pb& = p--bottom
+pb& = 3
+!- bl& = blank
+bl& = 32
+!- fr& = frame 1
+fr& = 200
+!- fc& = frame count
+fc& = 9
+!- fs$ = frame sequence: fr& + val(mid$(fs$, li%, 1))
+fs$ = "0123456780"
+sw% = rwindow(2):sh% = rwindow(3):rem global screen width & height
+!- w0$ = c--aicp$
+w0$ = " .*?"
+!- w1$ = col--aicp$
+w1$ = chr$(5)+chr$(28)+chr$(30)+chr$(158)
+!- wb& = c--blank%
+wb& = 1
+!- wa& = c--absent%
+wa& = 2
+!- wc& = c--correct%
+wc& = 3
+!- wp& = c--present%
+wp& = 4
+!- rc % = record counts for each word length (playable word count and dictionary word count)
+dim rc%(hl& - 2, 1)
+!- lc& = (perfectlettercounts%, presentlettercounts%)
+dim lc&(25, 1)
+!- bs& = lastplayedwords%, bestscores%
+dim bs&(hl& - 2, 1)
+for li% = ll& to hl&
+  bs&(li% - 2, 0) = 0:rem initialize last played words
+  bs&(li% - 2, 1) = mg&:rem set default best scores
+next li%
+gosub @proc--read--last--played--words
+gosub @proc--define--box--characters
+gosub @proc--define--frame--chars
+scnclr
+print "initializing... please wait...";:gosub @read--file--of--record--counts
+sleep 2
+return
+:
+rem proc--new--game
+@proc--new--game
+scnclr
+do
+a0% = 0:a1% = 0:a2$ = "puzzle size (2 - 12):":a3$ = "5":a4% = 2
+gosub @fn--prompt--for--digits
+!- pz& = size%
+pz& = rv%
+loop until pz& >= ll& and pz& <= hl&
+rcursor ,l0%
+a0% = 0:a1% = l0% + 1:a2$ = "strictly word guesses?"
+gosub @fn--simple--yes--no--prompt
+!- wg% = strictlywordguesses%
+wg% = rv%
+rcursor ,l0%
+a0% = 0:a1% = l0% + 1:a2$ = "forbid absent letters?"
+gosub @fn--simple--yes--no--prompt
+!- hm% = hardmode%
+hm% = rv%
+gosub @proc--bestscores--read
+a0& = pz&:gosub @fn--compute--maximum--turns
+!- mt& = maximumturns%
+mt& = rv%
+a0% = pz&:a1$ = mid$(w0$, wc&, 1):gosub @fn--gen--string
+!- sl$ = solved$
+sl$ = rv$
+a0% = 26:a1$ = mid$(w0$, wb&, 1):gosub @fn--gen--string
+!- ls$ = letterstates$
+ls$ = rv$
+!- lo% = lost%
+lo% = 0
+!- gc& = guesscount%
+gc& = 0
+!- cl& = currentline%
+cl& = 4
+a0& = pz&:gosub @fn--select--a--mystery--word
+!- tg$ = target$
+tg$ = rv$
+return
+:
+rem proc--main--loop
+@proc--main--loop
+scnclr
+!- l0% = count%
+l0& = 0
+a0& = pz&:gosub @proc--display--best--score
+do
+a0% = 0:a1% = 0:gosub @proc--display--letter--states
+a0% = l0& + 1:a1% = 2:gosub @fn--pad--number:l1$ = rv$
+a0% = mt&:a1% = 2:gosub @fn--pad--number:l2$ = rv$
+cursor 0, cl&:print chr$(159)l1$" of "l2$"> "chr$(5);
+gosub @fn--prompt--for--guess
+!- l3$ = guess$
+l3$ = rv$
+t1$ = l1$:t3$ = l3$:rem stash
+a0$ = l3$:a1$ = tg$:gosub @fn--compare--guess
+!- l4$ = mask$
+l4$ = rv$:print" ";
+a0$ = t3$:a1$ = l4$:a2% = 0:gosub @proc--reveal
+l1$ = t1$:l3$ = t3$:rem restore
+rem gosub @proc--default--colors
+l0& = l0& + 1
+cl& = cl& + 1
+loop until l4$ = sl$ or l0& = mt&
+lo% = (l4$ <> sl$):rem win or lose?
+print chr$(159);
+a0% = 0:a1% = cl&:a2% = 10 + pz&:a3& = asc(">"):a4& = asc("-"):a5 = 0.12
+gosub @proc--suspense:print chr$(5);
+if lo% then begin
+rem loss
+a0$ = tg$:a1% = 12:gosub @fn--rotate:tg$ = rv$
+a0$ = tg$:a1$ = sl$:a2% = -1:gosub @proc--reveal
+gosub @proc--wah--wah
+bend:else begin
+rem win
+print chr$(129)chr$(18)l3$chr$(146)
+gosub @proc--charge
+a0 = count%:a1 = mt%:gosub @fn--min
+a0& = pz&:a1& = rv:gosub @proc--update--best--score
+a0& = pz&:gosub @proc--display--best--score
+bend
+a0% = 0: a1% = 0:gosub @proc--display--letter--states
+gosub @proc--bestscores--write
+gc& = l0&
+return
+:
+rem proc--game--over
+@proc--game--over
+!- returns nothing
+if lo% then begin
+l0& = 28:l1$ = "so sorry! you lost."
+sleep 2
+bend:else begin
+l0& = 30:a0& = gc&:gosub @fn--derive--superlative:l1$ = rv$ + "!!"
+bend
+cursor int((sw% - len(l1$)) / 2), gc& + 6:print chr$(l0&)l1$
+sleep 2
+return
+:
+rem fn--play--again
+@fn--play--again
+a2$ = "play again?"
+a0% = int((sw% - len(a2$) - 8) / 2):a1% = gc& + 8
+foreground 7:gosub @fn--simple--yes--no--prompt
+return
+:
+rem proc--goodbye(a0$)
+@proc--goodbye
+!- a0$ = game name
+!- returns nothing
+cursor off
+scnclr
+t0$ = a0$:rem stash
+a0$ = "so long and thank you for playing..."
+foreground 7:gosub @proc--full--center--text
+a0$ = t0$:rem restore
+gosub @fn--center--text:l0& = rv&
+a0$ = t0$:rem restore
+for li% = 0 to l0& - 1
+tl% = li%:rem stash
+a0% = li%:a1$ = chr$(bl&):gosub @fn--gen--string:l1$ = rv$
+li% = tl%:rem restore
+cursor 0, int(sh% / 2) + 2:foreground mod(li%, 7) + 1:print l1$a0$:sleep 0.20
+next li%
+return
+:
+rem proc--welcome
+@proc--welcome
+rem gosub @proc--default--colors
+cursor off
+scnclr
+cursor 0, 2
+a0$="welcome to ...":gosub @proc--center:print:print
+a0$="030032032032032032032032032032032032":gosub @proc--banner:print
+a0$="032032032103032032103032098099032":gosub @proc--banner:print
+a0$="032032032096098099096103096096032":gosub @proc--banner:print
+a0$="032032032096096096096096096096032":gosub @proc--banner:print
+a0$="032032101100096096096096101100032":gosub @proc--banner:print
+a0$="032032032032101100032096032032032":gosub @proc--banner:print
+a0$="032032032032032032032032032032032":gosub @proc--banner:print
+a0$="158098099098099098099098099032032":gosub @proc--banner:print
+a0$="098100096096098100096096032032":gosub @proc--banner:print
+a0$="096032096096096032096096032032":gosub @proc--banner:print
+a0$="101097101100101097101100032032":gosub @proc--banner:print
+foreground 3:print:a0$="hit a key to continue ":gosub @proc--center
+a0 = sw%:a1 = 40:gosub @fn--min:bw% = rv
+a0 = sh%:a1 = 20:gosub @fn--min:bh% = rv
+p% = 2 * (bw% + bh% - 2)
+a0% = int((sw% - bw%) / 2) + 1:a1% = 1:a2% = bw% - 2:a3% = bh% - 2:a4& = 3:a5% = 0
+gosub @proc--animation
+:
+scnclr
+cursor 0, 2
+a0$=chr$(158)+"jotto 2020"+chr$(5)+" is a modern variant of":gosub @proc--center:print
+a0$=chr$(30)+"jotto"+chr$(5)+", the classic pen and paper ":gosub @proc--center:print
+a0$="word guessing game. the object of":gosub @proc--center:print
+a0$="the game is to guess the mystery ":gosub @proc--center:print
+a0$="english word with a letter length":gosub @proc--center:print
+a0$="between 2 and 12 (your choosing).":gosub @proc--center:print
+a0$="after each guess you will get to ":gosub @proc--center:print
+a0$="see a report of the letters (or  ":gosub @proc--center:print
+a0$="jots) in the guess that match or ":gosub @proc--center:print
+a0$="occur in the mystery word...     ":gosub @proc--center:print:print
+foreground 3:print:a0$="hit a key to continue ":gosub @proc--center
+a0 = sh%:a1 = 17:gosub @fn--min:bh% = rv
+p% = 2 * (bw% + bh% - 2)
+a0% = int((sw% - bw%) / 2) + 1:a1% = 1:a2% = bw% - 2:a3% = bh% - 2:a4& = 3:a5% = 0
+gosub @proc--animation
+:
+gosub @proc--default--colors:scnclr:cursor off
+cursor 0, 2
+a0$=chr$(28)+chr$(18)+"a"+chr$(146)+chr$(5)
+a0$=a0$+": absent from mystery word        ":gosub @proc--center:print:print
+a0$=chr$(158)+chr$(18)+"a"+chr$(146)+chr$(5)
+a0$=a0$+": present *but* improperly located":gosub @proc--center:print:print
+a0$=chr$(30)+chr$(18)+"a"+chr$(146)+chr$(5)
+a0$=a0$+": present *and* perfectly located ":gosub @proc--center:print:print
+a0$="through a process of elimination,":gosub @proc--center:print
+a0$="you should be able to deduce the ":gosub @proc--center:print
+a0$="correct letters using logic.     ":gosub @proc--center:print
+a0$="the number of allowed guesses for":gosub @proc--center:print
+a0$="solving the mystery word is based":gosub @proc--center:print
+a0$="on the length of the mystery     ":gosub @proc--center:print
+a0$="word, but the minimum is five.   ":gosub @proc--center:print:print
+a0$=chr$(5)+"good luck and have fun!":gosub @proc--center:print:print
+foreground 5:a0$="hit a key to begin playing ":gosub @proc--center
+a0 = sh%:a1 = 21:gosub @fn--min:bh% = rv
+p% = 2 * (bw% + bh% - 2)
+a0% = int((sw% - bw%) / 2) + 1:a1% = 1:a2% = bw% - 2:a3% = bh% - 2:a4& = 3:a5% = 0
+gosub @proc--animation
+return
+:
+rem proc--define--box--characters
+@proc--define--box--characters
+chardef 64,24,24,24,24,24,24,24,24:rem vertical
+chardef 65,.,.,.,255,255,.,.,.:rem horizontal
+chardef 66,.,.,.,7,15,28,24,24:rem upright c
+chardef 67,.,.,.,224,240,56,24,24:rem upleft c
+chardef 68,24,24,56,240,224,.,.,.:rem downleft c
+chardef 69,24,24,28,15,7,.,.,.:rem down right c
+chardef 70,24,24,24,255,255,.,.,.:rem up t
+chardef 71,.,.,.,255,255,24,24,24:rem down t
+return
+:
+rem proc--define--frame--chars
+@proc--define--frame--chars
+chardef fr&,255,255,255,255,255,255,255,255
+chardef fr& + 1,127,255,255,255,255,255,255,254
+chardef fr& + 2,62,126,126,126,126,126,126,124
+chardef fr& + 3,28,60,60,60,60,60,60,56
+chardef fr& + 4,28,28,28,28,28,28,28,28
+chardef fr& + 5,56,60,60,60,60,60,60,28
+chardef fr& + 6,124,126,126,126,126,126,126,62
+chardef fr& + 7,124,126,126,126,126,126,126,62
+chardef fr& + 8,254,255,255,255,255,255,255,127
+return
+:
+rem proc--default--colors
+@proc--default--colors
+border 5:background 0:foreground 1
+return
+:
+rem fn--clockwise--box--side--char(a0%, a1%, a2%)
+@fn--clockwise--box--side--char
+!- a0% = position; a1% = width; a2% = height
+!- 0 = upper left corner, 1 = upper middle, 2 = upper right corner,
+!- 3 = middle right, 4 = lower right corner, 5 = lower middle,
+!- 6 = lower left corner, 7 = middle left
+!- rv& is returned
+l0$ = "6665676468656964"
+l1% = .
+if (a0% > . and a0% < a1% - 1) then l1% = 1
+if (a0% = a1% - 1) then l1% = 2
+if (a0% >= a1% and a0% < a1% + a2% - 2) then l1% = 3
+if (a0% = a1% + a2% - 2) then l1% = 4
+if (a0% > a1% + a2% - 2 and a0% < 2 * a1% + a2% - 3) then l1% = 5
+if (a0% = 2 * a1% + a2% - 3) then l1% = 6
+if (a0% > 2 * a1% + a2% - 3) then l1% = 7
+rv& = val(mid$(l0$, l1% * 2 + 1, 2))
+return
+:
+rem proc--clockwise--plot(a0%, a1%, a2%, a3%, a4&, a5%, a6&)
+@proc--clockwise--plot
+!- a0% = ux, a1% = uy, a2% = width, a3% = height, a4& = color,
+!- a5% = pos, a6& = char
+l0% = a2% + a3% - 2:l1% = l0% + a2%:l2% = l1% + a3% - 2
+l4% = .
+if (a5% < a2%) then l4% = a5%
+if (a5% > (a2% - 1) and a5% < l0%) then l4% = a2% - 1
+if (a5% >= l0% and a5% < l1%) then l4% = l1% - a5% - 1
+l5% = .
+if (a5% > (a2% - 1) and a5% < l0%) then l5% = a5% - a2% + 1
+if (a5% >= l0% and a5% < l1%) then l5% = a3% - 1
+if (a5% >= l1%) then l5% = a3% - 2 - a5% + l1%
+t@&(a0% + l4%, a1% + l5%) = a6&
+c@&(a0% + l4%, a1% + l5%) = a4&
+return
+:
+rem proc--clockwise--box(a0%, a1%, a2%, a3%, a4&, a5%)
+@proc--clockwise--box
+!- a0% = ux, a1% = uy, a2% = width, a3% = height, a4& = color
+!- a5% = flag (0 = do not position cursor to upperleft corner in box)
+for li% = . to (a2% + a3% + a2% + a3% - 5)
+  t0% = a0%:t1% = a1%:t2% = a2%:rem stash
+  a0% = li%:a1% = a2%:a2% = a3%:rem set new arguments
+  gosub @fn--clockwise--box--side--char
+  a0% = t0%:a1% = t1%:a2% = t2%:rem restore
+  a5% = li%:a6& = rv&:rem set extra arguments
+  gosub @proc--clockwise--plot
+next li%
+if a5% then cursor a0% + 1, a1% + 1
+return
+:
+rem proc--animation(a0%, a1%, a2%, a3%, a4&, a5%)
+@proc--animation
+!- a0% = ux, a1% = uy, a2% = width, a3% = height, a4& = color
+!- a5% = flag (0 = do not position cursor to upperleft corner in box)
+gosub @proc--clockwise--box
+a0% = 1:a1% = 26:gosub @fn--rnd--int:l2& = rv%
+l3% = 0:l4$ = ""
+l6% = rcolor(1)
+do
+  get l4$
+  l3% = mod(l3% + 1, p%):l2& = mod(l2& + 1, 26) + 1
+  if l3% = 1 then l6% = mod((l6% + 1), 7) + 1
+  a0% = int((sw% - bw%) / 2):a1% = 0:a2% = bw%:a3% = bh% 
+  a4& = l6%:a5% = l3%:a6& = l2&
+  gosub @proc--clockwise--plot
+  vsync 0:sleep 0.1
+  a0% = int((sw% - bw%) / 2):a1% = 0:a2% = bw%:a3% = bh% 
+  a4& = rcolor(0):a5% = l3%:a6& = 32
+  gosub @proc--clockwise--plot
+loop until l4$ <> ""
+return
+:
+rem fn--rnd--int(a0%, a1%)
+@fn--rnd--int
+!- a0% = lo value, a1% = hi value
+!- returns rv% a (number between lo and hi)
+rv% = int(rnd(1) * (a1% - a0% + 1)) + a0%
+return
+:
+rem fn--min(a0, a1)
+!- a0 = value 1, a1 = value 2
+!- returns rv
+@fn--min
+rv = a1 + (a0 < a1) * (a1 - a0)
+return
+:
+rem fn--pad--number(a0%, a1%)
+@fn--pad--number
+!- a0% = value, a1% = length
+!- rv$ is returned
+l0$ = mid$(str$(a0%),2):rv$ = ""
+for li% = 1 to a1% - len(l0$):rv$ = rv$ + "0":next li%
+rv$ = rv$ + l0$
+return
+:
+rem fn--gen--string(a0%, a1$)
+@fn--gen--string
+!- a0% = num of characters, a1$ = text to repeat
+!- rv$ is returned
+rv$ = "":for li% = 1 to a0%:rv$ = rv$ + a1$:next li%
+return
+:
+rem fn--is--printable(a0&)
+@fn--is--printable
+!- a0& = character to check
+!- returns rv% (0 = false, -1 = true)
+rv% = ((a0& >= bl&) and (a0& <= 93)) or ((a0& >= 96) and (a0& <= 127))
+rv% = rv% or ((a0& >= 160) and (a0& <= 255))
+return
+:
+rem fn--strict--len(a0$)
+@fn--strict--len
+!- a0$ = text to compute printable character length for
+!- returns rv% (length of printable text)
+l0% = 0:l1& = len(a0$)
+for li& = 1 to l1&
+  a0& = asc(mid$(a0$, li&, 1)):gosub @fn--is--printable:l2% = rv%
+  if l2% then l0% = l0% + 1
+next li&
+rv% = l0%
+return
+:
+rem fn-strict-center-text(a0$)
+@fn-strict-center-text
+!- a0$ = text
+!- returns rv&
+gosub @fn--strict--len
+rv& = int((sw% - rv%) / 2) - (0 = mod(rv%, 2))
+return
+:
+rem fn--center--text(a0$)
+@fn--center--text
+!- a0$ = text to center
+!- returns rv&
+rv& = int((sw% - len(a0$)) / 2)
+return
+:
+rem proc--full--center--text(a0$)
+@proc--full--center--text
+gosub @fn--center--text:l0& = rv&
+cursor l0&, int(sh% / 2) - (0 = mod(sh%, 2)):print a0$;
+return
+:
+rem proc--center(a0$)
+@proc--center
+!- a0$ = text
+!- returns nothing
+l0% = len(a0$):t0% = l0%
+gosub @fn-strict-center-text:l1& = rv&
+l0% = t0%
+rcursor ,l2%:cursor l1&, l2%
+for li& = 1 to l0%
+  print mid$(a0$, li&, 1);
+next li&
+return
+:
+rem proc--banner(a0$)
+@proc--banner
+!- a0$ = text
+!- returns nothing
+l0% = len(a0$):l1% = 0
+for li& = 1 to l0% step 3
+  a0& = val(mid$(a0$, li&, 3)):gosub @fn--is--printable
+  if rv% then l1% = l1% + 1
+next li&
+l1% = int((sw% - l1%) / 2) - (0 = mod(l1%, 2))
+rcursor ,l2%:cursor l1%, l2%
+for li& = 1 to l0% step 3
+  print chr$(val(mid$(a0$, li&, 3)));
+next li&
+return
+:
+rem fn--rotate(a0$, a1%)
+@fn--rotate
+!- a0$ = word, a1% = signed number of characters to rotate
+!- returns rv$
+rv$ = "":l0% = len(a0$)
+for li% = 1 to l0%
+rv$ = rv$ + chr$(mod(asc(mid$(a0$, li%, 1)) - asc("a") + 26 - a1%, 26) + asc("a"))
+next li%
+return
+:
+rem fn--generic--prompt(a0%, a1%, a2$, a3$, a4%, a5$)
+@fn--generic--prompt
+!- a0% = x, a1% = y, a2$ = prompt label, a3$ = default value, a4% = max length
+!- a5$ is string of valid input characters
+!- rv$ is returned
+l0& = len(a2$ + a3$) + 1:l1$ = a3$
+t0% = a0%:rem stash
+a0% = l0& + 2:a1$ = " ":gosub @fn--gen--string:l2$ = rv$
+a0% = t0%:rem restore
+cursor a0%, a1%:print l2$
+cursor a0%, a1%:print chr$(5)a2$" "chr$(158)a3$;
+cursor a0% + l0&, a1%
+do
+  if len(l1$) > 0 then cursor on:else cursor off
+  getkey l3$
+  if ((l3$ = chr$(20) or l3$ = chr$(157)) and len(l1$) > 0) then l1$ = left$(l1$, len(l1$) - 1):print chr$(20);
+  if (instr(a5$, l3$) <> 0) and (len(l1$) < a4%) then l1$ = l1$ + l3$:print l3$;
+loop until l3$ = chr$(13)
+if len(l1$) < 1 then l1$ = a3$:print l1$
+rv$ = l1$
+cursor off
+return
+:
+rem fn--prompt--for--digits(a0%, a1%, a2$, a3$, a4%)
+@fn--prompt--for--digits
+!- a0% = x, a1% = y, a2$ = prompt text, a3$ = default value, a4% = max length
+!- rv% is returned
+a5$="0123456789"
+gosub @fn--generic--prompt
+rv% = val(rv$)
+return
+:
+rem fn--simple--yes--no--prompt(a0%, a1%, a2$)
+@fn--simple--yes--no--prompt
+!- a0% = x, a1% = y, a2$ = prompt text
+!- rv% is returned (-1 for true, 0 for false)
+a2$ = a2$ + " (y/n)":l0$="ny"
+cursor a0%, a1%:print chr$(5)a2$" ";
+do:getkey l1$:loop until instr(l0$, l1$) > 0
+rv% = ("y" = l1$)
+return
+:
+rem proc--read--last--played--words
+@proc--read--last--played--words
+dopen#1, "dat01.bin"
+if ds = 0 then begin
+  for li% = ll& to hl&:input#1, bs&(li% - 2, 0):next li%
+bend
+dclose#1
+return
+:
+rem proc--write--last--played--words
+@proc--write--last--played--words
+dopen#2, "@dat01.bin", w
+if ds = 0 then begin
+  for li% = ll& to hl&:print#2, bs&(li% - 2, 0):next li%
+bend
+dclose#2
+return
+:
+rem proc--display--best--score(a0&)
+@proc--display--best--score
+!- a0& = word size
+!- returns nothing
+l0$ = mid$(str$(a0&), 2):rem word size
+l1$ = chr$(129)+chr$(18)+l0$+chr$(146)+chr$(158)+" best:"+chr$(5)
+l1$ = l1$ + str$(bs&(a0& - 2, 1)) + "/" + mid$(str$(mt&), 2)
+cursor sw% - len(l1$) + 4, 0:print l1$
+return
+:
+rem proc--update--best--score(a0&, a1&)
+@proc--update--best--score
+!- a0& = word size, a1& = number of guesses
+!- returns nothing
+rem check if best score has been surpassed and update if needed
+if (bs&(a0& - 2, 1) > a1&) then bs&(a0& - 2, 1) = a1&
+return
+:
+rem proc--bestscores--read
+@proc--bestscores--read
+dopen#1, (gn$ + ".hi")
+if ds = 0 then begin
+  for li% = ll& to hl&:input#1, bs&(li% - 2, 1):next li%
+bend
+dclose#1
+return
+:
+rem proc--bestscores--write
+@proc--bestscores--write
+dopen#2, ("@" + gn$ + ".hi"), w
+for li% = ll& to hl&:print#2, bs&(li% - 2, 1):next li%
+dclose#2
+return
+:
+rem fn--binary--search(a0$)
+!- a0$ = word to guess
+!- returns rv (0 = not found)
+@fn--binary--search
+l0$ = a0$:l1 = 1:l2 = rc%(pz& - 2, 1):l3% = 0:rv = 0
+dopen#1,("dict" + right$("0" + mid$(str$(pz&), 2), 2)), l(pz&)
+do
+  l4 = int((l1 + l2) / 2):rem mid point
+  record#1, l4, 1:input#1, l5$
+!- print mid$(str$(l2),2)": "l0$
+  if l5$ < l0$ then l1 = l4 + 1:rem upper chunk
+  if l5$ > l0$ then l2 = l4 - 1:rem lower chunk
+  if l5$ = l0$ then rv = l4:l3% = -1:rem found
+loop while l1 <= l2 and not l3%
+dclose#1
+return
+:
+rem fn--select--a--mystery--word(a0&)
+@fn--select--a--mystery--word
+!- a0& = length%
+!- return rv$
+l0% = a0& - ll&
+l1% = rc%(l0%, 0)
+l2% = bs&(l0%, 0) + 1:if l2% > l1% then l2% = 1
+bs&(l0%, 0) = l2%
+gosub @proc--write--last--played--words
+a0$ = "data" + right$("0" + mid$(str$(a0&), 2), 2):a1& = a0&:a2 = l2%
+gosub @fn--file--read--word
+return
+:
+rem fn--confirm--file--exists(a0$, a1&)
+@fn--confirm--file--exists
+!- a0$ = filename, a1& = word size
+!- returns rv% (-1 or 0)
+dopen#1,(a0$)
+rv% = (ds = 0)
+dclose#1
+return
+:
+rem fn--file--read--word(a0$, a1&, a2)
+@fn--file--read--word
+!- a0$ = filename, a1& = word size, a2 = record number
+!- returns rv$
+rv$ = ""
+gosub @fn--confirm--file--exists
+if rv% then begin
+  dopen#1,(a0$), l(a1&)
+  if (a2 > 0) then record#1, a2, 1
+  input#1, rv$
+  dclose#1
+bend
+return
+:
+rem fn--check--word--validity(a0$)
+!- a0$ = word$
+!- returns rv%
+@fn--check--word--validity
+l0 = 0:l1& = len(a0$):l2% = 0:l3$ = ""
+t0$ = a0$:rem stash
+a0$ = "dict" + right$("0" + mid$(str$(l1&), 2), 2):a1& = l1&
+gosub @fn--confirm--file--exists:l2% = rv%
+a0$ = t0$:rem restore
+rv% = -1:rem default to true
+if l2% then begin
+  gosub @fn--binary--search:l0 = rv
+  if l0 < 1 then begin
+    rv% = 0:l3$ = chr$(158) + a0$ + chr$(28) + " not in word list!!!" + chr$(5)
+    cursor 0, 2:print l3$
+    sound 1, 3 * 256, 45:rem sound fx
+    sleep 2
+    a0% = sw% - 1:a1$ = " ":gosub @fn--gen--string
+    cursor 0, 2:print rv$:rem clear message text
+  bend
+bend
+return
+:
+rem fn--compute--maximum--turns(a0&)
+!- a0& = word length
+!- returns rv%
+@fn--compute--maximum--turns
+rv% = mg& + (a0& < 7) * -1
+return
+:
+rem fn--retrieve--letter--state(a0$)
+@fn--retrieve--letter--state
+!- a0$ = letter
+!- ls$ = LetterStates$
+!- returns rv% (1, 2, 3, or 4)
+l0$ = mid$(ls$, asc(a0$) - 64, 1)
+rv% = instr(w0$, l0$)
+return
+:
+rem proc--update--letter--state(a0$, a1%)
+@proc--update--letter--state
+!- a0$ = letter$, a1% = state
+!- returns nothing
+gosub @fn--retrieve--letter--state:l0% = rv%:l1% = l0%
+if a1% = wa& and l0% = wb& then l1% = a1%
+if a1% = wp& and l0% <> wc& then l1% = a1%
+if a1% = wc& then l1% = a1%
+mid$(ls$, asc(a0$)- 64, 1) = mid$(w0$, l1%, 1)
+return
+:
+rem proc--display--letter--states(a0%, a1%)
+@proc--display--letter--states
+!- a0% = x%, a1% = y%
+!- returns nothing
+for li% = 1 to len(ls$)
+a0$ = chr$(li% + 64):gosub @fn--retrieve--letter--state
+l0$ = mid$(w1$, rv%, 1)
+cursor a0% + li% - 1, a1%:print l0$chr$(18)chr$(li% + 64)chr$(146);
+next li%
+rem gosub @proc--default--colors
+return
+:
+rem fn--prompt--for--guess()
+@fn--prompt--for--guess
+!- returns rv$
+l0% = 0:rcursor l1&, l2&
+a0% = pz&:a1$ = " ":gosub @fn--gen--string:l3$ = rv$
+do
+  l8$ = "":l4% = 0:cursor on
+  do
+    getkey l5$
+    if ((l5$ = chr$(20) or l5$ = chr$(157)) and (len(l8$) > 0)) then l8$ = left$(l8$, len(l8$) - 1):print chr$(20);
+    if (l5$ >= "a" and l5$ <= "z") then begin
+      a0$ = l5$:l6% = -1:if hm% then gosub @fn--is--viable--letter--guess:l6% = rv%
+      if l6% and (len(l8$) < pz&) then l8$ = l8$ + l5$
+    bend
+    l7% = 129:rem orange
+    if len(l8$) <> pz& then begin
+      l7% = 5:rem white
+      cursor l1&, l2&:printl3$:rem clear out any previously typed letters
+    bend
+    cursor l1&, l2&:print chr$(l7%)l8$;
+  loop until l5$ = chr$(13) and len(l8$) = pz&
+  cursor off
+  l0% = -1
+  if wg% then begin
+    t1& = l1&:t3$ = l3$:t4% = l4%:rem stash
+    a0$ = l8$:gosub @fn--check--word--validity:l0% = rv%
+    l1& = t1&:l3$ = t3$:l4% = t4%:rem restore
+  bend
+  if not l0% then cursor l1&, l2&:print l3$:cursor l1&, l2&
+loop until l0%
+rv$ = l8$
+return
+:
+rem fn--is--viable--letter--guess(a0$)
+@fn--is--viable--letter--guess
+!- a0$ = letter to guess
+!- returns rv%
+gosub @fn--retrieve--letter--state
+!- wa& = c--absent%
+if (rv% = wa&) then rv% = 0:else rv% = -1
+return
+:
+rem fn--compare--guess(a0$, a1$) - compare guess with mystery word
+@fn--compare--guess
+!- a0$ = guess$, a1$ = target$
+!- returns rv$
+!- l0$ = guess$
+l0$ = a0$
+!- l1$ = target$
+l1$ = a1$
+l2& = len(l1$)
+a0$ = l0$:a1% = -12:gosub @fn--rotate:l0$ = rv$
+for li% = 1 to l2&
+!- l3$ = guess char
+  l3$ = mid$(l0$, li%, 1)
+!- l4$ = target char (uppered)
+  l4$ = mid$(l1$, li%, 1)
+  if l3$ = l4$ then begin
+    l5$ = mid$(w0$, wc&, 1):rem mask char (correct)
+    mid$(l0$, li%) = l5$
+    mid$(l1$, li%) = l5$
+  bend
+next li%
+l6$ = ""
+for li% = 1 to l2&
+  l3$ = mid$(l0$, li%, 1)
+  l7& = instr(l1$, l3$)
+!- l4$ = uppered
+  l4$ = mid$(l1$, li%, 1)
+  l5$ = mid$(w0$, wa&, 1):rem mask char (absent)
+  if l3$ = l4$ then l5$ = l4$
+  if l7& > 0 and l3$ <> l4$ then begin
+    l5$ = mid$(w0$, wp&, 1):rem mask char (present)
+    mid$(l0$, li%) = l5$
+    mid$(l1$, l7&) = l5$
+  bend
+l6$ = l6$ + l5$
+!- print l0$, l1$, l3$, l7&
+next li%
+rv$ = l6$
+return
+:
+rem proc--animate--frames(a0&, a1&, a2&, a3)
+@proc--animate--frames
+!- a0& = x%, a1& = y%, a2& = col%, a3 = sleep time
+!- returns nothing
+l0% = len(fs$) - 1
+for li% = 1 to l0%
+  l1& = fr& + val(mid$(fs$, li%, 1))
+  l2& = (li% < l0%) * -1 + (li% = l0%) * -a2&
+  t@&(a0&, a1&) = l1&:c@&(a0&, a1&) = l2&
+  sound 1, 8192 - li% * 256, 3:rem sound fx
+  vsync 0:sleep a3
+next li%
+return
+:
+rem proc--reveal(a0$, a1$, a2%)
+@proc--reveal
+!- a0$ = guess$, a1$ = mask$, a2% = final%
+!- returns nothing
+l0$ = a0$:l1$ = a1$:l2% = a2%:l3% = len(a0$):rcursor l4%, l5%
+if not l2% then begin
+  print chr$(5)chr$(18);
+  for li% = 1 to l3%
+    cursor l4% + li% - 1, l5%:print mid$(l0$, li%, 1);
+  next li%
+  print chr$(146)
+bend
+print chr$(18);
+for li% = 1 to l3%
+  l6$ = mid$(l1$, li%, 1)
+  l7% = instr(w0$, l6$)
+  l8% = l2% * -129 + (not l2%) * -asc(mid$(w1$, l7%, 1))
+  if l7% = 2 then l9% = 256 * 5  
+  if l7% = 3 then l9% = 256 * 50
+  if l7% = 4 then l9% = 256 * 25
+  l6$ = mid$(l0$, li%, 1)
+  ti% = li%:rem stash
+  a0& = l4%:a1& = l5%:a2& = l8%:a3 = 0.12:gosub @proc--animate--frames
+  li% = ti%:rem restore
+  sound 1, l9%, 30:rem sound fx
+  cursor l4%, l5%:print chr$(l8%)l6$;
+  sleep 0.4
+  l4% = l4% + 1
+  t0$ = l0$:rem stash
+  a0$ = l6$:a1% = l7%:gosub @proc--update--letter--state
+  l0$ = t0$:rem restore
+next li%
+print chr$(146)
+rem print
+return
+:
+rem proc--suspense(a0%, a1%, a2%, a3&, a4&, a5)
+@proc--suspense
+!- a0% = x%, a1% = y%, a2% = count, a3& = ch1%, a4& = ch2%, a5 = sleep time
+!- returns nothing
+cursor a0%, a1%:print chr$(5);
+for li% = 1 to a2%
+  print chr$(a4&)chr$(a3&);
+  sound 1, 1200, 2:rem sound fx
+  vsync 0:sleep a5:rem 0.12
+  if li% < a2% then print chr$(157)chr$(157)chr$(bl&);
+next li%
+return
+:
+rem proc--charge()
+@proc--charge
+!- G3(s.)C4(s.)E4(s.)G4(i.)E4(i)G4(h)
+tempo 18
+play "t7o3.sgo4.sc.se.igiehg"
+return
+:
+rem proc--wah--wah()
+@proc--wah--wah
+!- G2(i)G2(i)G2(i)E2(wq)F2(i))F2(i))F2(i)D2(wh)
+tempo 17
+play "t7o2iggg....heifffwd"
+return
+:
+rem fn--derive--superlative(a0&)
+@fn--derive--superlative
+!- a0& = number of guesses
+!- returns rv$
+rv$ = "inconceivable?"
+if a0& > 1 then rv$ = "extraordinary"
+if a0& > 2 then rv$ = "exceptional"
+if a0& > 3 then rv$ = "splendid"
+if a0& > 4 then rv$ = "remarkable"
+if a0& > 5 then rv$ = "commendable"
+return
+:
+rem read--file--of--record--counts
+@read--file--of--record--counts
+dopen#1, "dat00.bin"
+for li& = ll& to hl&
+  input#1, rc%(li& - 2, 0):input#1, rc%(li& - 2, 1)
+next li&
+dclose#1
+return
+:
